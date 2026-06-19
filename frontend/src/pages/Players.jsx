@@ -21,6 +21,13 @@ const Players = () => {
   const [profilePic, setProfilePic] = useState('');
   const [formError, setFormError] = useState('');
 
+  // Edit player form state
+  const [editingPlayer, setEditingPlayer] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editBattingStyle, setEditBattingStyle] = useState('RIGHT_HAND');
+  const [editBowlingStyle, setEditBowlingStyle] = useState('RIGHT_ARM_FAST');
+  const [editProfilePic, setEditProfilePic] = useState('');
+
   const fetchPlayers = async (nameQuery = '') => {
     setLoading(true);
     try {
@@ -72,6 +79,43 @@ const Players = () => {
       fetchPlayers(search);
     } catch (err) {
       setFormError(err.response?.data?.message || 'Failed to add player');
+    }
+  };
+
+  const handleStartEdit = (player) => {
+    setEditingPlayer(player);
+    setEditName(player.name);
+    setEditBattingStyle(player.battingStyle || 'RIGHT_HAND');
+    setEditBowlingStyle(player.bowlingStyle || 'RIGHT_ARM_FAST');
+    setEditProfilePic(player.profilePictureUrl || '');
+    setFormError('');
+  };
+
+  const handleUpdatePlayer = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    try {
+      await api.put(`/api/v1/players/${editingPlayer.id}`, {
+        name: editName,
+        battingStyle: editBattingStyle,
+        bowlingStyle: editBowlingStyle,
+        profilePictureUrl: editProfilePic || null,
+      });
+      setEditingPlayer(null);
+      fetchPlayers(search);
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to update player');
+    }
+  };
+
+  const handleDeletePlayer = async (id) => {
+    if (window.confirm('Are you sure you want to delete this player profile? This will soft-delete the player.')) {
+      try {
+        await api.delete(`/api/v1/players/${id}`);
+        fetchPlayers(search);
+      } catch (err) {
+        alert(err.response?.data?.message || 'Failed to delete player');
+      }
     }
   };
 
@@ -177,13 +221,35 @@ const Players = () => {
                   </div>
                 </div>
               </div>
-              <button
-                className="btn btn-secondary"
-                style={{ width: '100%', marginTop: '16px', fontSize: '0.85rem' }}
-                onClick={() => handleViewStats(player)}
-              >
-                View Career Statistics
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', fontSize: '0.85rem' }}
+                  onClick={() => handleViewStats(player)}
+                >
+                  View Career Statistics
+                </button>
+                {isScorerOrAdmin && (
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ flex: 1, fontSize: '0.82rem', padding: '8px 12px' }}
+                      onClick={() => handleStartEdit(player)}
+                    >
+                      ✏️ Edit
+                    </button>
+                    {user && user.role === 'ADMIN' && (
+                      <button
+                        className="btn btn-danger"
+                        style={{ flex: 1, fontSize: '0.82rem', padding: '8px 12px' }}
+                        onClick={() => handleDeletePlayer(player.id)}
+                      >
+                        🗑️ Delete
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -283,6 +349,63 @@ const Players = () => {
             ) : (
               <div style={{ padding: '20px', textAlign: 'center', color: 'var(--accent-red)' }}>Failed to load stats.</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Player Modal */}
+      {editingPlayer && (
+        <div style={styles.modalOverlay} onClick={() => setEditingPlayer(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2>Edit Player Profile</h2>
+              <button style={styles.closeBtn} onClick={() => setEditingPlayer(null)}>×</button>
+            </div>
+            {formError && <div style={styles.error}>{formError}</div>}
+            <form onSubmit={handleUpdatePlayer}>
+              <div className="form-group">
+                <label>Player Name *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  required
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label>Batting Style</label>
+                  <select className="form-control" value={editBattingStyle} onChange={(e) => setEditBattingStyle(e.target.value)} style={styles.select}>
+                    <option value="RIGHT_HAND">Right Hand Batsman</option>
+                    <option value="LEFT_HAND">Left Hand Batsman</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Bowling Style</label>
+                  <select className="form-control" value={editBowlingStyle} onChange={(e) => setEditBowlingStyle(e.target.value)} style={styles.select}>
+                    <option value="RIGHT_ARM_FAST">Right Arm Fast</option>
+                    <option value="RIGHT_ARM_SPIN">Right Arm Off-Spin</option>
+                    <option value="LEFT_ARM_FAST">Left Arm Fast</option>
+                    <option value="LEFT_ARM_SPIN">Left Arm Spin</option>
+                    <option value="NONE">None</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Profile Picture URL</label>
+                <input
+                  type="url"
+                  className="form-control"
+                  value={editProfilePic}
+                  onChange={(e) => setEditProfilePic(e.target.value)}
+                  placeholder="https://example.com/pic.jpg"
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
+                Save Changes
+              </button>
+            </form>
           </div>
         </div>
       )}
