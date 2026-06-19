@@ -47,9 +47,12 @@ public class Match extends BaseEntity {
     @Column(name = "result_margin_detail", length = 255)
     private String resultMarginDetail;
 
+    @Column(name = "overs", nullable = false)
+    private Integer overs = 20;
+
     public Match() {}
 
-    public Match(Tournament tournament, Team team1, Team team2, LocalDateTime matchDate, String status, Team tossWinner, String tossDecision, Team winner, String resultMarginDetail) {
+    public Match(Tournament tournament, Team team1, Team team2, LocalDateTime matchDate, String status, Team tossWinner, String tossDecision, Team winner, String resultMarginDetail, Integer overs) {
         this.tournament = tournament;
         this.team1 = team1;
         this.team2 = team2;
@@ -59,6 +62,7 @@ public class Match extends BaseEntity {
         this.tossDecision = tossDecision;
         this.winner = winner;
         this.resultMarginDetail = resultMarginDetail;
+        this.overs = overs != null ? overs : 20;
     }
 
     public Tournament getTournament() { return tournament; }
@@ -79,6 +83,8 @@ public class Match extends BaseEntity {
     public void setWinner(Team winner) { this.winner = winner; }
     public String getResultMarginDetail() { return resultMarginDetail; }
     public void setResultMarginDetail(String resultMarginDetail) { this.resultMarginDetail = resultMarginDetail; }
+    public Integer getOvers() { return overs; }
+    public void setOvers(Integer overs) { this.overs = overs; }
 
     public static class Builder {
         private Tournament tournament;
@@ -90,6 +96,7 @@ public class Match extends BaseEntity {
         private String tossDecision;
         private Team winner;
         private String resultMarginDetail;
+        private Integer overs = 20;
 
         public Builder tournament(Tournament tournament) { this.tournament = tournament; return this; }
         public Builder team1(Team team1) { this.team1 = team1; return this; }
@@ -100,8 +107,9 @@ public class Match extends BaseEntity {
         public Builder tossDecision(String tossDecision) { this.tossDecision = tossDecision; return this; }
         public Builder winner(Team winner) { this.winner = winner; return this; }
         public Builder resultMarginDetail(String resultMarginDetail) { this.resultMarginDetail = resultMarginDetail; return this; }
+        public Builder overs(Integer overs) { this.overs = overs; return this; }
         public Match build() {
-            return new Match(tournament, team1, team2, matchDate, status, tossWinner, tossDecision, winner, resultMarginDetail);
+            return new Match(tournament, team1, team2, matchDate, status, tossWinner, tossDecision, winner, resultMarginDetail, overs);
         }
     }
 

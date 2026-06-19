@@ -75,7 +75,6 @@ const Register = () => {
             >
               <option value="PLAYER">Player (Spectator/Profile)</option>
               <option value="SCORER">Scorer (Can record live match actions)</option>
-              <option value="ADMIN">Administrator (Full control)</option>
             </select>
           </div>
           <button

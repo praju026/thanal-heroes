@@ -9,6 +9,7 @@ import com.thanal.thanal_heroes.service.MatchService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,6 +36,17 @@ public class MatchController {
     @PreAuthorize("hasAnyRole('ADMIN', 'SCORER')")
     public ResponseEntity<MatchResponseDTO> createMatch(@Valid @RequestBody MatchRequestDTO request) {
         return ResponseEntity.ok(matchService.createMatch(request));
+    }
+
+    @PostMapping("/quick-start")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SCORER')")
+    public ResponseEntity<MatchResponseDTO> quickStartMatch(
+            @RequestParam String team1Id,
+            @RequestParam String team2Id,
+            @RequestParam int overs,
+            @RequestParam String tossWinnerId,
+            @RequestParam String tossDecision) {
+        return ResponseEntity.ok(matchService.quickStartMatch(team1Id, team2Id, overs, tossWinnerId, tossDecision));
     }
 
     @PutMapping("/{id}/toss")
@@ -91,6 +103,13 @@ public class MatchController {
             @RequestParam String winnerId,
             @RequestParam String resultMarginDetail) {
         return ResponseEntity.ok(matchService.completeMatch(id, winnerId, resultMarginDetail));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteMatch(@PathVariable String id) {
+        matchService.deleteMatch(id);
+        return ResponseEntity.ok(Map.of("message", "Match deleted successfully"));
     }
 
     @GetMapping

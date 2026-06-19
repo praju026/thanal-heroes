@@ -26,6 +26,7 @@ public class MatchService {
     private final MatchPlayerRepository matchPlayerRepository;
     private final InningsRepository inningsRepository;
     private final ScoreEventRepository scoreEventRepository;
+    private final TeamPlayerRepository teamPlayerRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     public MatchService(MatchRepository matchRepository,
@@ -35,6 +36,7 @@ public class MatchService {
                         MatchPlayerRepository matchPlayerRepository,
                         InningsRepository inningsRepository,
                         ScoreEventRepository scoreEventRepository,
+                        TeamPlayerRepository teamPlayerRepository,
                         SimpMessagingTemplate messagingTemplate) {
         this.matchRepository = matchRepository;
         this.teamRepository = teamRepository;
@@ -43,6 +45,7 @@ public class MatchService {
         this.matchPlayerRepository = matchPlayerRepository;
         this.inningsRepository = inningsRepository;
         this.scoreEventRepository = scoreEventRepository;
+        this.teamPlayerRepository = teamPlayerRepository;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -65,10 +68,73 @@ public class MatchService {
                 .team2(team2)
                 .matchDate(request.getMatchDate())
                 .status("SCHEDULED")
+                .overs(request.getOvers())
                 .build();
 
         Match savedMatch = matchRepository.save(match);
         return mapToResponseDTO(savedMatch);
+    }
+
+    @Transactional
+    public MatchResponseDTO quickStartMatch(String team1Id, String team2Id, int overs, String tossWinnerId, String tossDecision) {
+        Team team1 = teamRepository.findById(team1Id)
+                .orElseThrow(() -> new IllegalArgumentException("Team 1 not found with id: " + team1Id));
+        Team team2 = teamRepository.findById(team2Id)
+                .orElseThrow(() -> new IllegalArgumentException("Team 2 not found with id: " + team2Id));
+
+        Match match = Match.builder()
+                .team1(team1)
+                .team2(team2)
+                .matchDate(LocalDateTime.now())
+                .status("IN_PROGRESS")
+                .overs(overs)
+                .build();
+
+        Team tossWinner = team1Id.equals(tossWinnerId) ? team1 : team2;
+        match.setTossWinner(tossWinner);
+        match.setTossDecision(tossDecision.toUpperCase());
+
+        Match savedMatch = matchRepository.save(match);
+
+        // Auto-assign default playing XI (all team players)
+        setupDefaultSquad(savedMatch, team1);
+        setupDefaultSquad(savedMatch, team2);
+
+        // Start Innings 1
+        Team battingTeam = tossDecision.equalsIgnoreCase("BAT") ? tossWinner : (tossWinner == team1 ? team2 : team1);
+        Team bowlingTeam = battingTeam == team1 ? team2 : team1;
+
+        Innings innings = Innings.builder()
+                .match(savedMatch)
+                .battingTeam(battingTeam)
+                .bowlingTeam(bowlingTeam)
+                .inningsNumber(1)
+                .totalRuns(0)
+                .totalWickets(0)
+                .totalOvers(BigDecimal.ZERO)
+                .isCompleted(false)
+                .build();
+        inningsRepository.save(innings);
+
+        broadcastMatchUpdate(savedMatch.getId());
+
+        return mapToResponseDTO(savedMatch);
+    }
+
+    private void setupDefaultSquad(Match match, Team team) {
+        List<TeamPlayer> activeMembers = teamPlayerRepository.findActivePlayersByTeamId(team.getId());
+        if (activeMembers != null) {
+            for (TeamPlayer tp : activeMembers) {
+                Player player = tp.getPlayer();
+                MatchPlayer mp = MatchPlayer.builder()
+                        .match(match)
+                        .player(player)
+                        .team(team)
+                        .playingXi(true)
+                        .build();
+                matchPlayerRepository.save(mp);
+            }
+        }
     }
 
     @Transactional
@@ -168,10 +234,8 @@ public class MatchService {
         }
 
         String extraType = request.getExtraType() != null ? request.getExtraType().toUpperCase() : "NONE";
-        String dismissalType = request.getDismissalType() != null ? request.getDismissalType().toUpperCase() : "NONE";
 
         ScoreEvent event = ScoreEvent.builder()
-                .match(match)
                 .innings(innings)
                 .overNumber(request.getOverNumber())
                 .ballNumber(request.getBallNumber())
@@ -182,25 +246,30 @@ public class MatchService {
                 .extraRuns(request.getExtraRuns())
                 .extraType(extraType)
                 .wicket(request.isWicket())
-                .dismissalType(dismissalType)
+                .dismissalType(request.getDismissalType() != null ? request.getDismissalType().toUpperCase() : "NONE")
                 .fielder(fielder)
                 .build();
 
-        ScoreEvent savedEvent = scoreEventRepository.save(event);
+        scoreEventRepository.save(event);
 
-        // Update Innings stats
-        int runsScored = request.getRunsOffBat() + request.getExtraRuns();
-        innings.setTotalRuns(innings.getTotalRuns() + runsScored);
+        // Update innings totals
+        List<ScoreEvent> events = scoreEventRepository.findByInningsIdOrderByOverNumberAscBallNumberAsc(innings.getId());
+        int totalRuns = 0;
+        int totalWickets = 0;
+        long legalBallsCount = 0;
 
-        if (request.isWicket()) {
-            innings.setTotalWickets(innings.getTotalWickets() + 1);
+        for (ScoreEvent ev : events) {
+            totalRuns += ev.getRunsOffBat() + ev.getExtraRuns();
+            if (ev.isWicket() && !ev.getDismissalType().equalsIgnoreCase("RETIRED")) {
+                totalWickets++;
+            }
+            if (!ev.getExtraType().equalsIgnoreCase("WD") && !ev.getExtraType().equalsIgnoreCase("NB")) {
+                legalBallsCount++;
+            }
         }
 
-        // Calculate legal balls in this innings
-        List<ScoreEvent> allEvents = scoreEventRepository.findByInningsIdOrderByOverNumberAscBallNumberAsc(innings.getId());
-        long legalBallsCount = allEvents.stream()
-                .filter(e -> !e.getExtraType().equalsIgnoreCase("WD") && !e.getExtraType().equalsIgnoreCase("NB"))
-                .count();
+        innings.setTotalRuns(totalRuns);
+        innings.setTotalWickets(totalWickets);
 
         long overs = legalBallsCount / 6;
         long balls = legalBallsCount % 6;
@@ -208,17 +277,15 @@ public class MatchService {
 
         inningsRepository.save(innings);
 
-        // Broadcast live match update
         broadcastMatchUpdate(match.getId());
 
-        return mapToScoreEventResponseDTO(savedEvent);
+        return mapToScoreEventResponseDTO(event);
     }
 
     @Transactional
     public void completeInnings(String inningsId) {
         Innings innings = inningsRepository.findById(inningsId)
                 .orElseThrow(() -> new IllegalArgumentException("Innings not found with id: " + inningsId));
-
         innings.setCompleted(true);
         inningsRepository.save(innings);
 
@@ -230,9 +297,9 @@ public class MatchService {
     }
 
     @Transactional
-    public MatchResponseDTO completeMatch(String matchId, String winnerId, String resultMarginDetail) {
-        Match match = matchRepository.findById(matchId)
-                .orElseThrow(() -> new IllegalArgumentException("Match not found with id: " + matchId));
+    public MatchResponseDTO completeMatch(String id, String winnerId, String resultMarginDetail) {
+        Match match = matchRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Match not found with id: " + id));
 
         Team winner = teamRepository.findById(winnerId)
                 .orElseThrow(() -> new IllegalArgumentException("Winner team not found with id: " + winnerId));
@@ -240,11 +307,18 @@ public class MatchService {
         match.setWinner(winner);
         match.setResultMarginDetail(resultMarginDetail);
         match.setStatus("COMPLETED");
+
         Match savedMatch = matchRepository.save(match);
-
-        broadcastMatchUpdate(match.getId());
-
+        broadcastMatchUpdate(id);
         return mapToResponseDTO(savedMatch);
+    }
+
+    @Transactional
+    public void deleteMatch(String id) {
+        Match match = matchRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Match not found with id: " + id));
+        match.setDeleted(true);
+        matchRepository.save(match);
     }
 
     @Transactional(readOnly = true)
@@ -294,6 +368,7 @@ public class MatchService {
                 .winnerName(match.getWinner() != null ? match.getWinner().getName() : null)
                 .resultMarginDetail(match.getResultMarginDetail())
                 .innings(inningsDTOs)
+                .overs(match.getOvers())
                 .build();
     }
 

@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import api from '../services/api';
+import { AuthContext } from '../context/AuthContext';
 
 const MatchDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(false);
@@ -18,6 +21,16 @@ const MatchDetails = () => {
       console.error('Failed to fetch match details', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteMatch = async () => {
+    if (!window.confirm("Are you sure you want to permanently delete this match and all its scorecard history?")) return;
+    try {
+      await api.delete(`/api/v1/matches/${id}`);
+      navigate('/');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete match');
     }
   };
 
@@ -65,12 +78,23 @@ const MatchDetails = () => {
     );
   }
 
+  const isAdmin = user && user.role === 'ADMIN';
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
-      <div style={{ marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <Link to="/" style={{ color: 'var(--accent-green)', textDecoration: 'none', fontWeight: 600 }}>
           ← Back to Dashboard
         </Link>
+        {isAdmin && (
+          <button 
+            onClick={handleDeleteMatch}
+            className="btn btn-secondary" 
+            style={{ color: 'var(--accent-red)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '6px 12px', fontSize: '0.9rem' }}
+          >
+            🗑️ Delete Match
+          </button>
+        )}
       </div>
 
       {/* Main Score Board Header */}
@@ -93,7 +117,7 @@ const MatchDetails = () => {
                   {match.innings.find(i => i.battingTeamId === match.team1Id).totalWickets}
                 </span>
                 <span style={styles.oversText}>
-                  ({match.innings.find(i => i.battingTeamId === match.team1Id).totalOvers} ov)
+                  ({match.innings.find(i => i.battingTeamId === match.team1Id).totalOvers} / {match.overs || 20} ov)
                 </span>
               </div>
             ) : (
@@ -113,7 +137,7 @@ const MatchDetails = () => {
                   {match.innings.find(i => i.battingTeamId === match.team2Id).totalWickets}
                 </span>
                 <span style={styles.oversText}>
-                  ({match.innings.find(i => i.battingTeamId === match.team2Id).totalOvers} ov)
+                  ({match.innings.find(i => i.battingTeamId === match.team2Id).totalOvers} / {match.overs || 20} ov)
                 </span>
               </div>
             ) : (
@@ -161,7 +185,7 @@ const MatchDetails = () => {
                 <span style={styles.innLabel}>Wickets Lost</span>
               </div>
               <div style={styles.innStat}>
-                <span style={styles.innVal}>{inn.totalOvers}</span>
+                <span style={styles.innVal}>{inn.totalOvers} / {match.overs || 20}</span>
                 <span style={styles.innLabel}>Overs Bowled</span>
               </div>
               <div style={styles.innStat}>

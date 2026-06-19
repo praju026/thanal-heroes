@@ -20,10 +20,11 @@ public class MatchResponseDTO {
     private String winnerName;
     private String resultMarginDetail;
     private List<InningsResponseDTO> innings;
+    private Integer overs;
 
     public MatchResponseDTO() {}
 
-    public MatchResponseDTO(String id, String tournamentId, String tournamentName, String team1Id, String team1Name, String team2Id, String team2Name, LocalDateTime matchDate, String status, String tossWinnerId, String tossWinnerName, String tossDecision, String winnerId, String winnerName, String resultMarginDetail, List<InningsResponseDTO> innings) {
+    public MatchResponseDTO(String id, String tournamentId, String tournamentName, String team1Id, String team1Name, String team2Id, String team2Name, LocalDateTime matchDate, String status, String tossWinnerId, String tossWinnerName, String tossDecision, String winnerId, String winnerName, String resultMarginDetail, List<InningsResponseDTO> innings, Integer overs) {
         this.id = id;
         this.tournamentId = tournamentId;
         this.tournamentName = tournamentName;
@@ -40,6 +41,7 @@ public class MatchResponseDTO {
         this.winnerName = winnerName;
         this.resultMarginDetail = resultMarginDetail;
         this.innings = innings;
+        this.overs = overs;
     }
 
     public String getId() { return id; }
@@ -74,6 +76,8 @@ public class MatchResponseDTO {
     public void setResultMarginDetail(String resultMarginDetail) { this.resultMarginDetail = resultMarginDetail; }
     public List<InningsResponseDTO> getInnings() { return innings; }
     public void setInnings(List<InningsResponseDTO> innings) { this.innings = innings; }
+    public Integer getOvers() { return overs; }
+    public void setOvers(Integer overs) { this.overs = overs; }
 
     public static class Builder {
         private String id;
@@ -92,6 +96,7 @@ public class MatchResponseDTO {
         private String winnerName;
         private String resultMarginDetail;
         private List<InningsResponseDTO> innings;
+        private Integer overs;
 
         public Builder id(String id) { this.id = id; return this; }
         public Builder tournamentId(String tournamentId) { this.tournamentId = tournamentId; return this; }
@@ -109,8 +114,9 @@ public class MatchResponseDTO {
         public Builder winnerName(String winnerName) { this.winnerName = winnerName; return this; }
         public Builder resultMarginDetail(String resultMarginDetail) { this.resultMarginDetail = resultMarginDetail; return this; }
         public Builder innings(List<InningsResponseDTO> innings) { this.innings = innings; return this; }
+        public Builder overs(Integer overs) { this.overs = overs; return this; }
         public MatchResponseDTO build() {
-            return new MatchResponseDTO(id, tournamentId, tournamentName, team1Id, team1Name, team2Id, team2Name, matchDate, status, tossWinnerId, tossWinnerName, tossDecision, winnerId, winnerName, resultMarginDetail, innings);
+            return new MatchResponseDTO(id, tournamentId, tournamentName, team1Id, team1Name, team2Id, team2Name, matchDate, status, tossWinnerId, tossWinnerName, tossDecision, winnerId, winnerName, resultMarginDetail, innings, overs);
         }
     }
 
