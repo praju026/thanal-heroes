@@ -19,6 +19,11 @@ const Teams = () => {
   const [logoUrl, setLogoUrl] = useState('');
   const [formError, setFormError] = useState('');
 
+  // Edit Team state
+  const [editingTeam, setEditingTeam] = useState(null);
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editLogoUrl, setEditLogoUrl] = useState('');
+
   const fetchTeams = async () => {
     setLoading(true);
     try {
@@ -95,6 +100,42 @@ const Teams = () => {
       handleSelectTeam(selectedTeam);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to remove player');
+    }
+  };
+
+  const handleStartEditTeam = (team) => {
+    setEditingTeam(team);
+    setEditTeamName(team.name);
+    setEditLogoUrl(team.logoUrl || '');
+    setFormError('');
+  };
+
+  const handleUpdateTeam = async (e) => {
+    e.preventDefault();
+    setFormError('');
+    try {
+      const response = await api.put(`/api/v1/teams/${editingTeam.id}`, {
+        name: editTeamName,
+        logoUrl: editLogoUrl || null
+      });
+      setEditingTeam(null);
+      fetchTeams();
+      setSelectedTeam(response.data);
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to update team');
+    }
+  };
+
+  const handleDeleteTeam = async (id) => {
+    if (window.confirm('Are you sure you want to delete this team? This will soft-delete the team.')) {
+      try {
+        await api.delete(`/api/v1/teams/${id}`);
+        setSelectedTeam(null);
+        setTeamPlayers([]);
+        fetchTeams();
+      } catch (err) {
+        alert(err.response?.data?.message || 'Failed to delete team');
+      }
     }
   };
 
@@ -192,8 +233,30 @@ const Teams = () => {
                     <span>🏏</span>
                   )}
                 </div>
-                <div>
-                  <h2 style={{ marginBottom: '4px' }}>{selectedTeam.name}</h2>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                    <h2 style={{ marginBottom: '4px' }}>{selectedTeam.name}</h2>
+                    {isScorerOrAdmin && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleStartEditTeam(selectedTeam)}
+                          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                        >
+                          ✏️ Edit Team
+                        </button>
+                        {user && user.role === 'ADMIN' && (
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => handleDeleteTeam(selectedTeam.id)}
+                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <p style={{ color: 'var(--text-muted)' }}>Roster Size: {teamPlayers.length} players</p>
                 </div>
               </div>
@@ -269,6 +332,44 @@ const Teams = () => {
           )}
         </div>
       </div>
+
+      {/* Edit Team Modal */}
+      {editingTeam && (
+        <div style={styles.modalOverlay} onClick={() => setEditingTeam(null)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2>Edit Team Profile</h2>
+              <button style={styles.closeBtn} onClick={() => setEditingTeam(null)}>×</button>
+            </div>
+            {formError && <div style={styles.error}>{formError}</div>}
+            <form onSubmit={handleUpdateTeam}>
+              <div className="form-group">
+                <label>Team Name *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={editTeamName}
+                  onChange={(e) => setEditTeamName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Team Logo URL</label>
+                <input
+                  type="url"
+                  className="form-control"
+                  value={editLogoUrl}
+                  onChange={(e) => setEditLogoUrl(e.target.value)}
+                  placeholder="https://example.com/logo.png"
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
+                Save Changes
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
