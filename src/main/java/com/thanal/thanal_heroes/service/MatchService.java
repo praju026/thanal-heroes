@@ -236,6 +236,7 @@ public class MatchService {
         String extraType = request.getExtraType() != null ? request.getExtraType().toUpperCase() : "NONE";
 
         ScoreEvent event = ScoreEvent.builder()
+                .match(match)
                 .innings(innings)
                 .overNumber(request.getOverNumber())
                 .ballNumber(request.getBallNumber())
