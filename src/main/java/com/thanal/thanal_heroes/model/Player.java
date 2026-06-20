@@ -20,7 +20,7 @@ public class Player extends BaseEntity {
     @Column(name = "name", length = 100, nullable = false)
     private String name;
 
-    @Column(name = "profile_picture_url", length = 255)
+    @Column(name = "profile_picture_url", columnDefinition = "LONGTEXT")
     private String profilePictureUrl;
 
     @Column(name = "batting_style", length = 50)

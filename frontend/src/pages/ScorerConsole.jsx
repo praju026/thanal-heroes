@@ -26,6 +26,9 @@ const ScorerConsole = () => {
   const [bowlingTeam, setBowlingTeam] = useState('');
   const [inningsNo, setInningsNo] = useState(1);
 
+  const [isPlayersSetupCompleted, setIsPlayersSetupCompleted] = useState(false);
+  const [lastBowlerId, setLastBowlerId] = useState('');
+
   // 4. Scoring Event State
   const [batsmanId, setBatsmanId] = useState('');
   const [nonStrikerId, setNonStrikerId] = useState('');
@@ -53,6 +56,10 @@ const ScorerConsole = () => {
         setActiveInnings(active || null);
         if (active) {
           setInningsNo(active.inningsNumber);
+          const totalOversFloat = parseFloat(active.totalOvers);
+          if (totalOversFloat > 0 || active.totalRuns > 0 || active.totalWickets > 0) {
+            setIsPlayersSetupCompleted(true);
+          }
         }
       }
 
@@ -115,6 +122,7 @@ const ScorerConsole = () => {
     try {
       const response = await api.post(`/api/v1/matches/innings?matchId=${id}&battingTeamId=${battingTeam}&bowlingTeamId=${bowlingTeam}&inningsNumber=${inningsNo}`);
       setActiveInnings(response.data);
+      setIsPlayersSetupCompleted(false);
       fetchMatch();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to start innings');
@@ -187,6 +195,8 @@ const ScorerConsole = () => {
         const temp = newStriker;
         newStriker = newNonStriker;
         newNonStriker = temp;
+        // Save the previous bowler to exclude them from the next over
+        setLastBowlerId(bowlerId);
         // Reset bowler for the new over
         newBowlerId = '';
       }
@@ -280,6 +290,29 @@ const ScorerConsole = () => {
     ? (activeInnings.totalRuns / parseFloat(activeInnings.totalOvers)).toFixed(2)
     : '0.00';
 
+  // Live Stats for Active Batsmen & Bowler
+  const strikerStats = activeInnings?.batsmen?.find(b => b.batsmanId === batsmanId);
+  const nonStrikerStats = activeInnings?.batsmen?.find(b => b.batsmanId === nonStrikerId);
+  const currentBowlerStats = activeInnings?.bowlers?.find(b => b.bowlerId === bowlerId);
+
+  // Available Next Batsmen (not currently active, and not out)
+  const getAvailableNextBatsmen = () => {
+    if (!activeInnings) return [];
+    const outBatsmenIds = activeInnings.batsmen
+      ? activeInnings.batsmen.filter(b => b.isOut).map(b => b.batsmanId)
+      : [];
+    return currentBattingSquad.filter(p => p.id !== nonStrikerId && p.id !== batsmanId && !outBatsmenIds.includes(p.id));
+  };
+
+  // Available Next Bowlers (excluding the last bowler who finished the over)
+  const getAvailableNextBowlers = () => {
+    return currentBowlingSquad.filter(p => p.id !== lastBowlerId);
+  };
+
+  // Overlays checking
+  const showWicketOverlay = isPlayersSetupCompleted && !batsmanId && getAvailableNextBatsmen().length > 0;
+  const showBowlerOverlay = isPlayersSetupCompleted && batsmanId && !bowlerId;
+
   return (
     <div style={{ padding: '16px 20px', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -325,7 +358,7 @@ const ScorerConsole = () => {
       {/* STEP 1: RECORD TOSS */}
       {match.status === 'SCHEDULED' && (
         <div className="card" style={styles.sectionCard}>
-          <h2>Step 1: Record Toss Details</h2>
+          <h2>Record Toss Details</h2>
           <form onSubmit={handleRecordToss} style={{ marginTop: '16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
@@ -354,7 +387,7 @@ const ScorerConsole = () => {
       {/* STEP 2: SETUP PLAYING XI */}
       {match.status === 'TOSS_PENDING' && (
         <div className="card" style={styles.sectionCard}>
-          <h2>Step 2: Assign Squad Rosters / Playing XI</h2>
+          <h2>Assign Squad Rosters / Playing XI</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Select the players representing each team in this match.</p>
 
           <form onSubmit={handleSaveSquads}>
@@ -400,7 +433,7 @@ const ScorerConsole = () => {
       {/* STEP 3: START INNINGS */}
       {match.status === 'INNINGS_BREAK' || (match.status === 'TOSS_PENDING' && match.tossWinnerId != null) || (match.status === 'TOSS_PENDING' && !activeInnings && match.tossDecision != null) ? (
         <div className="card" style={styles.sectionCard}>
-          <h2>Step 3: Start Innings</h2>
+          <h2>Start Innings</h2>
           <form onSubmit={handleStartInnings} style={{ marginTop: '16px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
               <div className="form-group">
@@ -434,12 +467,98 @@ const ScorerConsole = () => {
         </div>
       ) : null}
 
+      {/* STEP 3.5: SELECT STARTING PLAYERS */}
+      {match.status === 'IN_PROGRESS' && activeInnings && !isPlayersSetupCompleted && (
+        <div className="card" style={styles.sectionCard}>
+          <h2>Select Starting Players</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>Select the opening batsmen and bowler to start scoring.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+            <div className="form-group">
+              <label>Striker (Batter 1)</label>
+              <select className="form-control" value={batsmanId} onChange={(e) => setBatsmanId(e.target.value)} required style={styles.select}>
+                <option value="">Select Striker...</option>
+                {currentBattingSquad.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Non-Striker (Batter 2)</label>
+              <select className="form-control" value={nonStrikerId} onChange={(e) => setNonStrikerId(e.target.value)} required style={styles.select}>
+                <option value="">Select Non-Striker...</option>
+                {currentBattingSquad.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Opening Bowler</label>
+              <select className="form-control" value={bowlerId} onChange={(e) => setBowlerId(e.target.value)} required style={styles.select}>
+                <option value="">Select Bowler...</option>
+                {currentBowlingSquad.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            style={{ width: '100%' }}
+            onClick={() => {
+              if (!batsmanId || !nonStrikerId || !bowlerId) {
+                alert('All starting players must be selected!');
+                return;
+              }
+              if (batsmanId === nonStrikerId) {
+                alert('Striker and Non-Striker must be different players!');
+                return;
+              }
+              setIsPlayersSetupCompleted(true);
+            }}
+          >
+            Begin Scoring
+          </button>
+        </div>
+      )}
+
       {/* STEP 4: RECORD BALL BY BALL */}
-      {match.status === 'IN_PROGRESS' && activeInnings && (
+      {match.status === 'IN_PROGRESS' && activeInnings && isPlayersSetupCompleted && (
         <div className="card" style={styles.sectionCard}>
           <h2 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '1.4rem' }}>⚡</span> Live Scoring Logs
           </h2>
+
+          {/* Active Batsmen & Bowler Individual stats banner */}
+          <div style={styles.liveActivePlayersStats}>
+            <div style={{ ...styles.activePlayerStatCard, borderLeft: '3px solid var(--accent-green)' }}>
+              <span style={styles.activePlayerRole}>🏏 Striker</span>
+              <strong style={styles.activePlayerName}>
+                {currentBattingSquad.find(p => p.id === batsmanId)?.name || 'Striker'}
+              </strong>
+              <span style={styles.activePlayerFigures}>
+                {strikerStats ? `${strikerStats.runs} (${strikerStats.ballsFaced}b) 4s:${strikerStats.fours} 6s:${strikerStats.sixes}*` : '0 (0b)*'}
+              </span>
+            </div>
+            <div style={{ ...styles.activePlayerStatCard, borderLeft: '3px solid var(--text-muted)' }}>
+              <span style={styles.activePlayerRole}>👤 Non-Striker</span>
+              <strong style={styles.activePlayerName}>
+                {currentBattingSquad.find(p => p.id === nonStrikerId)?.name || 'Non-Striker'}
+              </strong>
+              <span style={styles.activePlayerFigures}>
+                {nonStrikerStats ? `${nonStrikerStats.runs} (${nonStrikerStats.ballsFaced}b) 4s:${nonStrikerStats.fours} 6s:${nonStrikerStats.sixes}` : '0 (0b)'}
+              </span>
+            </div>
+            <div style={{ ...styles.activePlayerStatCard, borderLeft: '3px solid var(--accent-gold)' }}>
+              <span style={styles.activePlayerRole}>🥎 Bowler</span>
+              <strong style={styles.activePlayerName}>
+                {currentBowlingSquad.find(p => p.id === bowlerId)?.name || 'Bowler'}
+              </strong>
+              <span style={styles.activePlayerFigures}>
+                {currentBowlerStats ? `${currentBowlerStats.overs} ov, ${currentBowlerStats.wickets}-${currentBowlerStats.runsConceded} (Econ: ${currentBowlerStats.economy})` : '0.0 ov, 0-0'}
+              </span>
+            </div>
+          </div>
 
           <form onSubmit={handleRecordBall}>
             {/* Active Players Selector Cards */}
@@ -664,7 +783,7 @@ const ScorerConsole = () => {
       {/* STEP 5: COMPLETE MATCH */}
       {match.status === 'INNINGS_BREAK' && !activeInnings && (
         <div className="card" style={styles.sectionCard}>
-          <h2>Step 5: End Innings / Complete Match</h2>
+          <h2>End Innings / Complete Match</h2>
           <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => {
               setInningsNo(2);
@@ -711,6 +830,51 @@ const ScorerConsole = () => {
               Conclude Match & Publish Results
             </button>
           </form>
+        </div>
+      )}
+      {/* WICKET OVERLAY (FULL SCREEN MODAL) */}
+      {showWicketOverlay && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalContent, maxWidth: '500px', textAlign: 'center' }}>
+            <h2 style={{ color: 'var(--accent-red)', marginBottom: '8px' }}>🔴 Wicket!</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Select the next batsman to take strike.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {getAvailableNextBatsmen().map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ width: '100%', padding: '12px', fontSize: '1rem' }}
+                  onClick={() => setBatsmanId(p.id)}
+                >
+                  {p.name} ({p.battingStyle?.replace('_', ' ')})
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOWLER OVERLAY (FULL SCREEN MODAL) */}
+      {showBowlerOverlay && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modalContent, maxWidth: '500px', textAlign: 'center' }}>
+            <h2 style={{ color: 'var(--accent-gold)', marginBottom: '8px' }}>🥎 Over Completed!</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Select the bowler for the next over.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {getAvailableNextBowlers().map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ width: '100%', padding: '12px', fontSize: '1rem' }}
+                  onClick={() => setBowlerId(p.id)}
+                >
+                  {p.name} ({p.bowlingStyle !== 'NONE' ? p.bowlingStyle?.replace('_', ' ') : 'Bowler'})
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -839,6 +1003,37 @@ const styles = {
     border: '1px solid rgba(245, 158, 11, 0.2)',
     background: 'rgba(245, 158, 11, 0.01)',
     borderRadius: '10px',
+  },
+  liveActivePlayersStats: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '12px',
+    marginBottom: '20px'
+  },
+  activePlayerStatCard: {
+    background: 'rgba(255, 255, 255, 0.02)',
+    border: '1px solid var(--border-glass)',
+    borderRadius: '10px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  activePlayerRole: {
+    fontSize: '0.75rem',
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    fontWeight: 'bold'
+  },
+  activePlayerName: {
+    fontSize: '0.95rem',
+    color: '#ffffff'
+  },
+  activePlayerFigures: {
+    fontSize: '0.85rem',
+    color: 'var(--accent-green)',
+    fontWeight: 'bold',
+    fontFamily: 'monospace'
   }
 };
 

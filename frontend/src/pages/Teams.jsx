@@ -24,6 +24,66 @@ const Teams = () => {
   const [editTeamName, setEditTeamName] = useState('');
   const [editLogoUrl, setEditLogoUrl] = useState('');
 
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 300;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(base64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setLogoUrl(compressed);
+    } catch (err) {
+      console.error('Image compression failed', err);
+      setFormError('Failed to process image');
+    }
+  };
+
+  const handleEditFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setEditLogoUrl(compressed);
+    } catch (err) {
+      console.error('Image compression failed', err);
+      setFormError('Failed to process image');
+    }
+  };
+
   const fetchTeams = async () => {
     setLoading(true);
     try {
@@ -169,14 +229,20 @@ const Teams = () => {
               />
             </div>
             <div className="form-group">
-              <label>Team Logo URL</label>
+              <label>Team Logo (Local Image)</label>
               <input
-                type="url"
+                type="file"
+                accept="image/*"
                 className="form-control"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://example.com/logo.png"
+                onChange={handleFileChange}
+                style={{ padding: '8px' }}
               />
+              {logoUrl && (
+                <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img src={logoUrl} alt="Preview" style={{ width: '50px', height: '50px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--accent-green)' }} />
+                  <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '4px 8px', width: 'auto' }} onClick={() => setLogoUrl('')}>Remove Logo</button>
+                </div>
+              )}
             </div>
             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
               Create Team
@@ -354,14 +420,20 @@ const Teams = () => {
                 />
               </div>
               <div className="form-group">
-                <label>Team Logo URL</label>
+                <label>Team Logo (Local Image)</label>
                 <input
-                  type="url"
+                  type="file"
+                  accept="image/*"
                   className="form-control"
-                  value={editLogoUrl}
-                  onChange={(e) => setEditLogoUrl(e.target.value)}
-                  placeholder="https://example.com/logo.png"
+                  onChange={handleEditFileChange}
+                  style={{ padding: '8px' }}
                 />
+                {editLogoUrl && (
+                  <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img src={editLogoUrl} alt="Preview" style={{ width: '50px', height: '50px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--accent-green)' }} />
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '4px 8px', width: 'auto' }} onClick={() => setEditLogoUrl('')}>Remove Logo</button>
+                  </div>
+                )}
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
                 Save Changes

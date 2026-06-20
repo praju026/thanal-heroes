@@ -13,7 +13,7 @@ public class Team extends BaseEntity {
     @Column(name = "name", length = 100, nullable = false, unique = true)
     private String name;
 
-    @Column(name = "logo_url", length = 255)
+    @Column(name = "logo_url", columnDefinition = "LONGTEXT")
     private String logoUrl;
 
     public Team() {}

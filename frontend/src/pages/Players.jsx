@@ -28,6 +28,66 @@ const Players = () => {
   const [editBowlingStyle, setEditBowlingStyle] = useState('RIGHT_ARM_FAST');
   const [editProfilePic, setEditProfilePic] = useState('');
 
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 300;
+          if (width > height) {
+            if (width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            }
+          } else {
+            if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          resolve(base64);
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setProfilePic(compressed);
+    } catch (err) {
+      console.error('Image compression failed', err);
+      setFormError('Failed to process image');
+    }
+  };
+
+  const handleEditFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setEditProfilePic(compressed);
+    } catch (err) {
+      console.error('Image compression failed', err);
+      setFormError('Failed to process image');
+    }
+  };
+
   const fetchPlayers = async (nameQuery = '') => {
     setLoading(true);
     try {
@@ -168,14 +228,20 @@ const Players = () => {
               </div>
             </div>
             <div className="form-group">
-              <label>Profile Picture URL</label>
+              <label>Profile Picture (Local Image)</label>
               <input
-                type="url"
+                type="file"
+                accept="image/*"
                 className="form-control"
-                value={profilePic}
-                onChange={(e) => setProfilePic(e.target.value)}
-                placeholder="https://example.com/pic.jpg"
+                onChange={handleFileChange}
+                style={{ padding: '8px' }}
               />
+              {profilePic && (
+                <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img src={profilePic} alt="Preview" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--accent-green)' }} />
+                  <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '4px 8px', width: 'auto' }} onClick={() => setProfilePic('')}>Remove Image</button>
+                </div>
+              )}
             </div>
             <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
               Create Player Profile
@@ -393,14 +459,20 @@ const Players = () => {
                 </div>
               </div>
               <div className="form-group">
-                <label>Profile Picture URL</label>
+                <label>Profile Picture (Local Image)</label>
                 <input
-                  type="url"
+                  type="file"
+                  accept="image/*"
                   className="form-control"
-                  value={editProfilePic}
-                  onChange={(e) => setEditProfilePic(e.target.value)}
-                  placeholder="https://example.com/pic.jpg"
+                  onChange={handleEditFileChange}
+                  style={{ padding: '8px' }}
                 />
+                {editProfilePic && (
+                  <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img src={editProfilePic} alt="Preview" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--accent-green)' }} />
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '4px 8px', width: 'auto' }} onClick={() => setEditProfilePic('')}>Remove Image</button>
+                  </div>
+                )}
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
                 Save Changes

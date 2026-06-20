@@ -13,6 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.thanal.thanal_heroes.dto.BatsmanScorecardDTO;
+import com.thanal.thanal_heroes.dto.BowlerScorecardDTO;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -374,6 +380,162 @@ public class MatchService {
     }
 
     private InningsResponseDTO mapToInningsResponseDTO(Innings innings) {
+        List<ScoreEvent> events = scoreEventRepository.findByInningsIdOrderByOverNumberAscBallNumberAsc(innings.getId());
+        
+        Map<String, BatsmanScorecardDTO> batsmanMap = new LinkedHashMap<>();
+        Map<String, BowlerScorecardDTO> bowlerMap = new LinkedHashMap<>();
+        Map<String, Integer> bowlerBallsMap = new HashMap<>();
+        Map<String, Map<Integer, Integer>> bowlerOverRuns = new HashMap<>();
+        Map<String, Map<Integer, Integer>> bowlerOverLegalBalls = new HashMap<>();
+
+        for (ScoreEvent ev : events) {
+            // Process Striker
+            String batsmanId = ev.getBatsman().getId();
+            if (!batsmanMap.containsKey(batsmanId)) {
+                batsmanMap.put(batsmanId, new BatsmanScorecardDTO(
+                    batsmanId,
+                    ev.getBatsman().getName(),
+                    0, 0, 0, 0, false, ""
+                ));
+            }
+            // Process Non-Striker
+            if (ev.getNonStriker() != null) {
+                String nonStrikerId = ev.getNonStriker().getId();
+                if (!batsmanMap.containsKey(nonStrikerId)) {
+                    batsmanMap.put(nonStrikerId, new BatsmanScorecardDTO(
+                        nonStrikerId,
+                        ev.getNonStriker().getName(),
+                        0, 0, 0, 0, false, ""
+                    ));
+                }
+            }
+
+            // Update Striker Stats
+            BatsmanScorecardDTO strikerCard = batsmanMap.get(batsmanId);
+            strikerCard.setRuns(strikerCard.getRuns() + ev.getRunsOffBat());
+            if (!ev.getExtraType().equalsIgnoreCase("WD")) {
+                strikerCard.setBallsFaced(strikerCard.getBallsFaced() + 1);
+            }
+            if (ev.getRunsOffBat() == 4) {
+                strikerCard.setFours(strikerCard.getFours() + 1);
+            } else if (ev.getRunsOffBat() == 6) {
+                strikerCard.setSixes(strikerCard.getSixes() + 1);
+            }
+
+            if (ev.isWicket()) {
+                strikerCard.setIsOut(true);
+                String details = "";
+                String dType = ev.getDismissalType().toUpperCase();
+                String bowlerName = ev.getBowler().getName();
+                String fielderName = ev.getFielder() != null ? ev.getFielder().getName() : "";
+                switch (dType) {
+                    case "BOWLED":
+                        details = "b " + bowlerName;
+                        break;
+                    case "CAUGHT":
+                        if (!fielderName.isEmpty()) {
+                            details = "c " + fielderName + " b " + bowlerName;
+                        } else {
+                            details = "c & b " + bowlerName;
+                        }
+                        break;
+                    case "LBW":
+                        details = "lbw b " + bowlerName;
+                        break;
+                    case "STUMPED":
+                        if (!fielderName.isEmpty()) {
+                            details = "st " + fielderName + " b " + bowlerName;
+                        } else {
+                            details = "st b " + bowlerName;
+                        }
+                        break;
+                    case "HIT_WICKET":
+                        details = "hit wicket b " + bowlerName;
+                        break;
+                    case "RUN_OUT":
+                        if (!fielderName.isEmpty()) {
+                            details = "run out (" + fielderName + ")";
+                        } else {
+                            details = "run out";
+                        }
+                        break;
+                    case "RETIRED":
+                        details = "retired";
+                        break;
+                    default:
+                        details = "out";
+                        break;
+                }
+                strikerCard.setDismissalDetail(details);
+            }
+
+            // Process Bowler
+            String bowlerId = ev.getBowler().getId();
+            if (!bowlerMap.containsKey(bowlerId)) {
+                bowlerMap.put(bowlerId, new BowlerScorecardDTO(
+                    bowlerId,
+                    ev.getBowler().getName(),
+                    BigDecimal.ZERO, 0, 0, 0, BigDecimal.ZERO
+                ));
+            }
+
+            BowlerScorecardDTO bowlerCard = bowlerMap.get(bowlerId);
+            int runsConceded = ev.getRunsOffBat();
+            if (ev.getExtraType().equalsIgnoreCase("WD") || ev.getExtraType().equalsIgnoreCase("NB")) {
+                runsConceded += ev.getExtraRuns();
+            }
+            bowlerCard.setRunsConceded(bowlerCard.getRunsConceded() + runsConceded);
+
+            if (ev.isWicket() && !ev.getDismissalType().equalsIgnoreCase("RUN_OUT") && !ev.getDismissalType().equalsIgnoreCase("RETIRED")) {
+                bowlerCard.setWickets(bowlerCard.getWickets() + 1);
+            }
+
+            if (!ev.getExtraType().equalsIgnoreCase("WD") && !ev.getExtraType().equalsIgnoreCase("NB")) {
+                bowlerBallsMap.put(bowlerId, bowlerBallsMap.getOrDefault(bowlerId, 0) + 1);
+            }
+
+            int overNum = ev.getOverNumber();
+            bowlerOverRuns.computeIfAbsent(bowlerId, k -> new HashMap<>());
+            bowlerOverRuns.get(bowlerId).put(overNum, bowlerOverRuns.get(bowlerId).getOrDefault(overNum, 0) + runsConceded);
+
+            bowlerOverLegalBalls.computeIfAbsent(bowlerId, k -> new HashMap<>());
+            if (!ev.getExtraType().equalsIgnoreCase("WD") && !ev.getExtraType().equalsIgnoreCase("NB")) {
+                bowlerOverLegalBalls.get(bowlerId).put(overNum, bowlerOverLegalBalls.get(bowlerId).getOrDefault(overNum, 0) + 1);
+            }
+        }
+
+        // Finalize bowlers
+        for (Map.Entry<String, BowlerScorecardDTO> entry : bowlerMap.entrySet()) {
+            String bowlerId = entry.getKey();
+            BowlerScorecardDTO bowlerCard = entry.getValue();
+            int totalBalls = bowlerBallsMap.getOrDefault(bowlerId, 0);
+            int ov = totalBalls / 6;
+            int bl = totalBalls % 6;
+            bowlerCard.setOvers(BigDecimal.valueOf(ov + bl / 10.0));
+
+            if (totalBalls > 0) {
+                double economyVal = (double) bowlerCard.getRunsConceded() / (totalBalls / 6.0);
+                bowlerCard.setEconomy(BigDecimal.valueOf(economyVal).setScale(2, java.math.RoundingMode.HALF_UP));
+            } else {
+                bowlerCard.setEconomy(BigDecimal.ZERO);
+            }
+
+            int maidens = 0;
+            Map<Integer, Integer> runsPerOver = bowlerOverRuns.get(bowlerId);
+            Map<Integer, Integer> legalBallsPerOver = bowlerOverLegalBalls.get(bowlerId);
+            if (runsPerOver != null && legalBallsPerOver != null) {
+                for (Map.Entry<Integer, Integer> ballEntry : legalBallsPerOver.entrySet()) {
+                    int overNo = ballEntry.getKey();
+                    int legalBalls = ballEntry.getValue();
+                    int runsInOver = runsPerOver.getOrDefault(overNo, 0);
+                    if (legalBalls == 6 && runsInOver == 0) {
+                        maidens++;
+                    }
+                }
+            }
+            bowlerCard.setMaidens(maidens);
+        }
+
         return InningsResponseDTO.builder()
                 .id(innings.getId())
                 .inningsNumber(innings.getInningsNumber())
@@ -385,6 +547,8 @@ public class MatchService {
                 .totalWickets(innings.getTotalWickets())
                 .totalOvers(innings.getTotalOvers())
                 .completed(innings.isCompleted())
+                .batsmen(new ArrayList<>(batsmanMap.values()))
+                .bowlers(new ArrayList<>(bowlerMap.values()))
                 .build();
     }
 

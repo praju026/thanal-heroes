@@ -1,6 +1,7 @@
 package com.thanal.thanal_heroes.dto;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public class InningsResponseDTO {
     private String id;
@@ -13,10 +14,15 @@ public class InningsResponseDTO {
     private int totalWickets;
     private BigDecimal totalOvers;
     private boolean completed;
+    private List<BatsmanScorecardDTO> batsmen;
+    private List<BowlerScorecardDTO> bowlers;
 
     public InningsResponseDTO() {}
 
-    public InningsResponseDTO(String id, int inningsNumber, String battingTeamId, String battingTeamName, String bowlingTeamId, String bowlingTeamName, int totalRuns, int totalWickets, BigDecimal totalOvers, boolean completed) {
+    public InningsResponseDTO(String id, int inningsNumber, String battingTeamId, String battingTeamName, 
+                              String bowlingTeamId, String bowlingTeamName, int totalRuns, int totalWickets, 
+                              BigDecimal totalOvers, boolean completed, 
+                              List<BatsmanScorecardDTO> batsmen, List<BowlerScorecardDTO> bowlers) {
         this.id = id;
         this.inningsNumber = inningsNumber;
         this.battingTeamId = battingTeamId;
@@ -27,6 +33,8 @@ public class InningsResponseDTO {
         this.totalWickets = totalWickets;
         this.totalOvers = totalOvers;
         this.completed = completed;
+        this.batsmen = batsmen;
+        this.bowlers = bowlers;
     }
 
     public String getId() { return id; }
@@ -49,6 +57,10 @@ public class InningsResponseDTO {
     public void setTotalOvers(BigDecimal totalOvers) { this.totalOvers = totalOvers; }
     public boolean isCompleted() { return completed; }
     public void setCompleted(boolean completed) { this.completed = completed; }
+    public List<BatsmanScorecardDTO> getBatsmen() { return batsmen; }
+    public void setBatsmen(List<BatsmanScorecardDTO> batsmen) { this.batsmen = batsmen; }
+    public List<BowlerScorecardDTO> getBowlers() { return bowlers; }
+    public void setBowlers(List<BowlerScorecardDTO> bowlers) { this.bowlers = bowlers; }
 
     public static class Builder {
         private String id;
@@ -61,6 +73,8 @@ public class InningsResponseDTO {
         private int totalWickets;
         private BigDecimal totalOvers;
         private boolean completed;
+        private List<BatsmanScorecardDTO> batsmen;
+        private List<BowlerScorecardDTO> bowlers;
 
         public Builder id(String id) { this.id = id; return this; }
         public Builder inningsNumber(int inningsNumber) { this.inningsNumber = inningsNumber; return this; }
@@ -72,8 +86,11 @@ public class InningsResponseDTO {
         public Builder totalWickets(int totalWickets) { this.totalWickets = totalWickets; return this; }
         public Builder totalOvers(BigDecimal totalOvers) { this.totalOvers = totalOvers; return this; }
         public Builder completed(boolean completed) { this.completed = completed; return this; }
+        public Builder batsmen(List<BatsmanScorecardDTO> batsmen) { this.batsmen = batsmen; return this; }
+        public Builder bowlers(List<BowlerScorecardDTO> bowlers) { this.bowlers = bowlers; return this; }
+
         public InningsResponseDTO build() {
-            return new InningsResponseDTO(id, inningsNumber, battingTeamId, battingTeamName, bowlingTeamId, bowlingTeamName, totalRuns, totalWickets, totalOvers, completed);
+            return new InningsResponseDTO(id, inningsNumber, battingTeamId, battingTeamName, bowlingTeamId, bowlingTeamName, totalRuns, totalWickets, totalOvers, completed, batsmen, bowlers);
         }
     }
 
