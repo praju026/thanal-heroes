@@ -46,9 +46,10 @@ const ScorerConsole = () => {
       const response = await api.get(`/api/v1/matches/${id}`);
       setMatch(response.data);
 
+      let active = null;
       // Set active innings if in progress
       if (response.data.innings && response.data.innings.length > 0) {
-        const active = response.data.innings.find(i => !i.completed);
+        active = response.data.innings.find(i => !i.completed);
         setActiveInnings(active || null);
         if (active) {
           setInningsNo(active.inningsNumber);
@@ -61,6 +62,8 @@ const ScorerConsole = () => {
 
       const t2Res = await api.get(`/api/v1/teams/${response.data.team2Id}`);
       setTeam2Players(t2Res.data.players || []);
+
+      return active;
     } catch (err) {
       console.error('Error loading scorer console details', err);
     } finally {
@@ -145,6 +148,60 @@ const ScorerConsole = () => {
         fielderId: fielderId || null
       });
 
+      // Refresh Match scorecard and get updated active innings
+      const updatedInnings = await fetchMatch();
+
+      // 1. Calculate run-based strike rotation
+      let runRotation = false;
+      const runs = parseInt(runsOffBat);
+      if (runs % 2 === 1) {
+        runRotation = true;
+      } else if (extraType === 'LB' || extraType === 'B') {
+        if (parseInt(extraRuns) % 2 === 1) {
+          runRotation = true;
+        }
+      }
+
+      // 2. Check if over completed
+      let overCompleted = false;
+      let newBowlerId = bowlerId;
+      if (updatedInnings) {
+        const currentOvers = parseFloat(updatedInnings.totalOvers);
+        if (currentOvers > 0 && currentOvers % 1 === 0) {
+          overCompleted = true;
+        }
+      }
+
+      // Apply changes to striker and non-striker
+      let newStriker = batsmanId;
+      let newNonStriker = nonStrikerId;
+
+      if (runRotation) {
+        const temp = newStriker;
+        newStriker = newNonStriker;
+        newNonStriker = temp;
+      }
+
+      if (overCompleted) {
+        // Swap striker/non-striker at the end of the over
+        const temp = newStriker;
+        newStriker = newNonStriker;
+        newNonStriker = temp;
+        // Reset bowler for the new over
+        newBowlerId = '';
+      }
+
+      if (isWicket) {
+        // Striker is dismissed, clear striker selection so scorer must select new batsman
+        setBatsmanId('');
+        setNonStrikerId(newNonStriker);
+      } else {
+        setBatsmanId(newStriker);
+        setNonStrikerId(newNonStriker);
+      }
+
+      setBowlerId(newBowlerId);
+
       // Reset ball inputs
       setRunsOffBat(0);
       setExtraRuns(0);
@@ -152,9 +209,6 @@ const ScorerConsole = () => {
       setIsWicket(false);
       setDismissalType('NONE');
       setFielderId('');
-
-      // Refresh Match scorecard
-      fetchMatch();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to record ball event');
     }
